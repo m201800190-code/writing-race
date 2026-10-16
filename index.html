@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مسابقة الكتابة السريعة - الطالب</title>
+    <style>
+        * { box-sizing: border-box; font-family: 'Tahoma', 'Segoe UI', sans-serif; }
+        body {
+            margin: 0; min-height: 100vh;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px;
+        }
+        .card {
+            background: #fff; border-radius: 20px; padding: 40px 30px;
+            max-width: 620px; width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,.35);
+            text-align: center;
+        }
+        h1 { color: #1e3c72; margin: 0 0 8px; font-size: 26px; }
+        .subtitle { color: #666; margin-bottom: 25px; font-size: 14px; }
+        input, select {
+            width: 100%; padding: 14px 16px; font-size: 16px;
+            border: 2px solid #ddd; border-radius: 10px; outline: none;
+            transition: .2s; text-align: right; margin-bottom: 15px;
+            font-family: inherit;
+        }
+        input:focus, select:focus { border-color: #2a5298; }
+        .sentence {
+            background: #fff8e1; border: 2px dashed #ffb300;
+            padding: 20px; border-radius: 12px; margin: 20px 0;
+            font-size: 22px; font-weight: bold; color: #5d4037;
+            user-select: none;
+        }
+        textarea {
+            width: 100%; min-height: 110px; padding: 14px;
+            font-size: 18px; border: 2px solid #ddd; border-radius: 10px;
+            resize: none; outline: none; text-align: right;
+            font-family: inherit;
+        }
+        textarea:focus { border-color: #2a5298; }
+        .timer {
+            font-size: 42px; font-weight: bold; color: #2a5298;
+            font-variant-numeric: tabular-nums; margin: 10px 0;
+            font-family: 'Courier New', monospace;
+        }
+        button {
+            background: #2a5298; color: #fff; border: none;
+            padding: 15px 30px; font-size: 18px; border-radius: 10px;
+            cursor: pointer; font-weight: bold; width: 100%;
+            margin-top: 15px; transition: .2s;
+        }
+        button:hover:not(:disabled) { background: #1e3c72; transform: translateY(-2px); }
+        button:disabled { background: #999; cursor: not-allowed; transform: none; }
+        .hidden { display: none !important; }
+        .success {
+            background: #e8f5e9; color: #2e7d32; padding: 25px;
+            border-radius: 12px; font-size: 18px; font-weight: bold;
+            border: 2px solid #4caf50;
+        }
+        .warn { color: #c62828; font-size: 14px; margin-top: 10px; min-height: 20px; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h1>📝 مسابقة الكتابة السريعة</h1>
+    <div class="subtitle">أ. سالم الشبلي - تقنية المعلومات</div>
+
+    <!-- شاشة التسجيل -->
+    <div id="setupScreen">
+        <input type="text" id="pinInput" placeholder="رقم الغرفة (PIN) - 6 أرقام" maxlength="6" inputmode="numeric">
+        <input type="text" id="nameInput" placeholder="اسم الطالب الكامل" autocomplete="off">
+        <select id="classInput">
+            <option value="">-- اختر الصف --</option>
+            <option value="5/1">5/1</option><option value="5/2">5/2</option><option value="5/3">5/3</option>
+            <option value="6/1">6/1</option><option value="6/2">6/2</option><option value="6/3">6/3</option>
+            <option value="7/1">7/1</option><option value="7/2">7/2</option><option value="7/3">7/3</option>
+            <option value="8/1">8/1</option><option value="8/2">8/2</option><option value="8/3">8/3</option>
+            <option value="9/1">9/1</option><option value="9/2">9/2</option><option value="9/3">9/3</option>
+        </select>
+        <button onclick="joinRoom()">🚀 دخول المسابقة</button>
+        <div class="warn" id="warn1"></div>
+    </div>
+
+    <!-- شاشة الكتابة -->
+    <div id="raceScreen" class="hidden">
+        <div class="sentence">العلم نور والجهل ظلام.</div>
+        <div class="timer" id="timerDisplay">0.000</div>
+        <textarea id="inputArea" placeholder="اكتب الجملة هنا بالضبط... سيبدأ الوقت عند أول حرف" disabled></textarea>
+        <button id="submitBtn" onclick="submitResult()" disabled>✅ إرسال النتيجة</button>
+        <div class="warn" id="warn2"></div>
+    </div>
+
+    <!-- شاشة النجاح -->
+    <div id="doneScreen" class="hidden">
+        <div class="success">
+            🎉 تم تسجيل نتيجتك بنجاح<br>
+            <div style="font-size: 34px; margin-top: 15px; font-family: monospace;" id="finalTime"></div>
+        </div>
+        <p style="color:#666;margin-top:20px;">يمكنك الآن إغلاق الجهاز.</p>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js";
+    import { getDatabase, ref, push } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyB_7Zm84C0NMobbanWAn_HX_iVO3x90EAo",
+        authDomain: "writing-race.firebaseapp.com",
+        databaseURL: "https://writing-race-default-rtdb.firebaseio.com",
+        projectId: "writing-race",
+        storageBucket: "writing-race.firebasestorage.app",
+        messagingSenderId: "336621141538",
+        appId: "1:336621141538:web:e3fbc4f3215a8dd198547b"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const TARGET = "العلم نور والجهل ظلام.";
+    let startTime = 0, timerInterval = null, finished = false;
+    let studentData = {};
+
+    const $ = id => document.getElementById(id);
+
+    window.joinRoom = function() {
+        const pin = $("pinInput").value.trim();
+        const name = $("nameInput").value.trim();
+        const cls = $("classInput").value;
+
+        if (!pin || pin.length !== 6 || isNaN(pin)) {
+            $("warn1").textContent = "⚠️ رقم الغرفة يجب أن يكون 6 أرقام"; return;
+        }
+        if (!name)  { $("warn1").textContent = "⚠️ اكتب اسمك"; return; }
+        if (!cls)   { $("warn1").textContent = "⚠️ اختر الصف"; return; }
+
+        studentData = { pin, name, class: cls };
+        $("setupScreen").classList.add("hidden");
+        $("raceScreen").classList.remove("hidden");
+
+        const inp = $("inputArea");
+        inp.disabled = false;
+        inp.focus();
+        inp.addEventListener("input", onTyping);
+    };
+
+    function onTyping() {
+        if (startTime === 0 && $("inputArea").value.length > 0) {
+            startTime = performance.now();
+            timerInterval = setInterval(() => {
+                const t = (performance.now() - startTime) / 1000;
+                $("timerDisplay").textContent = t.toFixed(3);
+            }, 30);
+            $("submitBtn").disabled = false;
+        }
+    }
+
+    window.submitResult = async function() {
+        if (finished) return;
+        const text = $("inputArea").value.trim();
+        if (!text) { $("warn2").textContent = "⚠️ اكتب الجملة أولاً"; return; }
+
+        finished = true;
+        clearInterval(timerInterval);
+        const elapsed = (performance.now() - startTime) / 1000;
+        $("timerDisplay").textContent = elapsed.toFixed(3);
+        $("submitBtn").disabled = true;
+        $("inputArea").disabled = true;
+
+        try {
+            const resultsRef = ref(db, `rooms/${studentData.pin}/results`);
+            await push(resultsRef, {
+                name: studentData.name,
+                class: studentData.class,
+                time: parseFloat(elapsed.toFixed(3)),
+                correct: text === TARGET,
+                timestamp: Date.now()
+            });
+        } catch (e) {
+            console.error("خطأ في الحفظ:", e);
+        }
+
+        $("raceScreen").classList.add("hidden");
+        $("doneScreen").classList.remove("hidden");
+        $("finalTime").textContent = elapsed.toFixed(3) + " ثانية";
+    };
+
+    // منع اللصق والنسخ
+    document.addEventListener("paste", e => e.preventDefault());
+    document.addEventListener("contextmenu", e => e.preventDefault());
+    window.addEventListener("beforeunload", e => {
+        if (startTime > 0 && !finished) { e.preventDefault(); e.returnValue = ""; }
+    });
+</script>
+</body>
+</html>
